@@ -2,7 +2,9 @@
 
 An autonomous multi-agent pipeline for **system identification** of real physical plants. Given a plant that can be excited with inputs and observed at its outputs, the system produces a **control-ready model** — model + uncertainty description + validity region — with minimal human involvement, under the hard constraint that real experiments are expensive.
 
-![Demo animation](demo/demo.gif)
+<p align="center">
+  <img src="demo/demo.gif" alt="Demo animation" width="800"/>
+</p>
 
 *Side-by-side: actual plant (blue) vs. identified model (orange) under composite PRBS excitation. Parameter accuracy shown bottom-left.*
 
@@ -27,28 +29,7 @@ All experiment calls are routed through a guarded **Plant API** that enforces sa
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Orchestrator (routes only — no domain reasoning)           │
-│  Blackboard / Dossier (lean shared state: IDs, not data)    │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ dispatch
-        ┌───────────────────▼────────────────────────────┐
-        │           Specialist agents                     │
-        │  Intake → Modeler → Estimator → Validation      │
-        │              ↓              ↓                   │
-        │        Grey-box SO    Surrogate SO              │
-        │              └──────────────┘                   │
-        │                   Ship                          │
-        └───────────────────┬────────────────────────────┘
-                            │ tool calls
-        ┌───────────────────▼────────────────────────────┐
-        │  Tools (deterministic, heavy work stays here)   │
-        │  Plant API · Budget manager · Experiment DB     │
-        │  Model registry · Solver toolkit               │
-        │  Experiment-design toolkit · Symbolic math      │
-        └────────────────────────────────────────────────┘
-```
+![Pipeline flowchart](demo/FlowChart.png)
 
 **Key design decisions:**
 
@@ -56,10 +37,6 @@ All experiment calls are routed through a guarded **Plant API** that enforces sa
 - **Experiments are a shared, budgeted resource.** Everything goes through the Plant API; no agent can bypass the safety gate or budget manager.
 - **References, not contents.** Agents pass artifact IDs; raw datasets and models live in stores.
 - **Lean coordination.** The orchestrator routes on three enum fields (`gap_type`, `improvable`, `budget.remaining`). It never computes them.
-
-### Pipeline flowchart
-
-![Pipeline flowchart](demo/FlowChart.png)
 
 ---
 
@@ -280,94 +257,6 @@ y_clean = sol.y[1:2, :]   # state index 1 = omega
 
 ---
 
-## Project structure
-
-```
-Control_Agent/
-├── main.py                       # Pipeline entry point (auto-generates demo on completion)
-├── requirements.txt
-├── configs/
-│   └── pendulum_config.yaml      # Reference config (demo plant)
-│
-├── demo/
-│   ├── demo.gif                  # Auto-generated after each pipeline run
-│   └── FlowChart.png             # Pipeline architecture flowchart
-│
-├── visualization/
-│   ├── demo.py                   # Side-by-side pendulum animation (CLI + library)
-│   └── pendulum_viz.py           # Phase portraits, model comparison, residual maps
-│
-├── core/
-│   ├── schemas.py                # All shared types (Dossier, PlantContract, Verdict, …)
-│   └── orchestrator.py           # Routing state machine (LangGraph)
-│
-├── agents/
-│   ├── intake.py                 # LLM: parse description → PlantContract
-│   ├── modeler.py                # LLM: derive symbolic ODE structure
-│   ├── id_analyst.py             # Structural/practical identifiability checks
-│   ├── estimator.py              # Parameter fitting (NLS inner loop)
-│   ├── experiment_design.py      # Input design (PRBS, multisine, adversarial)
-│   ├── validation.py             # Adversarial probing → gap_type verdict
-│   ├── ship.py                   # Assemble and store final deliverable
-│   ├── greybox/                  # Grey-box sub-orchestrator + workers
-│   │   ├── sub_orchestrator.py
-│   │   ├── strategy_selector.py
-│   │   ├── residual_trainer.py
-│   │   └── uncertainty_estimator.py
-│   └── surrogate/                # Surrogate sub-orchestrator + workers
-│       ├── sub_orchestrator.py
-│       ├── model_class_selector.py
-│       ├── active_sampler.py
-│       ├── trainer.py
-│       └── uncertainty_estimator.py
-│
-├── tools/
-│   ├── plant_api.py              # Safety gate + budget + logging (sole path to plant)
-│   ├── budget_manager.py         # Global experiment budget
-│   ├── experiment_db.py          # Append-only run store (SQLite + .npz arrays)
-│   ├── model_registry.py         # Versioned model artifact store
-│   ├── solver_toolkit.py         # NLS, subspace ID, ODE simulation, metrics
-│   ├── experiment_design_toolkit.py  # FIM-optimal design, PRBS/multisine generators
-│   └── symbolic_math.py          # Structural identifiability, ODE compilation
-│
-├── plants/
-│   ├── base_plant.py             # Abstract BasePlant interface
-│   └── inverted_pendulum.py      # Demo plant: pendulum with viscous + dry friction
-│
-├── prompts/                      # System prompts for LLM agents
-└── tests/
-    ├── unit/
-    └── integration/
-```
-
----
-
-## The fidelity ladder
-
-```
-  Intake
-    │
-    ├─ physics known ──► Modeler ──► Estimator ──► Validation
-    │                                                   │
-    │                               ┌───── PASS ────► Ship
-    │                               │
-    │                         FAIL: gap_type?
-    │                               │
-    │                    fixable ──► Modeler (revise structure)
-    │                               │
-    │            structured_residual ──► Grey-box sub-orchestrator
-    │                               │      (physics + learned correction)
-    │                               │
-    │                   unmodelable ──► Surrogate sub-orchestrator
-    │                                      (GP / NARX / Neural ODE / SINDy)
-    │
-    └─ simulator/surrogate supplied ──► Validation (evaluate first)
-```
-
-Escalation is one-way (white → grey → black). Grey-box may hand a physical signature back to the Modeler once. The surrogate rung is terminal: if it cannot reach tolerance within budget, the best achieved model ships with explicit caveats.
-
----
-
 ## The deliverable
 
 Every run produces:
@@ -391,21 +280,6 @@ The default demo uses a simulated pendulum (torque in, angle out) with:
 - Coulomb/dry friction (unknown magnitude) — the pathological case that breaks the white-box linear model and forces escalation to grey-box
 
 This is a deliberately hard test case: the white-box model is structurally correct but incomplete, producing non-white residuals correlated with `sign(angular velocity)`. The grey-box agent learns the friction correction; if that also fails, the surrogate takes over.
-
----
-
-## Requirements
-
-| Component | Purpose |
-|---|---|
-| `anthropic` | LLM calls (Intake, Modeler) |
-| `langgraph` / `langchain-core` | Orchestrator state machine |
-| `numpy`, `scipy` | Simulation, NLS fitting, signal processing |
-| `sympy` | Symbolic ODE manipulation, identifiability |
-| `torch`, `gpytorch`, `botorch` | Surrogate models (GP, neural) |
-| `pysindy` | Sparse system identification |
-| `control` | Linear systems analysis |
-| `sqlalchemy` | Experiment database |
 
 ---
 
@@ -474,7 +348,6 @@ of n RHS expressions — one per state equation:
 and supports any coupled first-order system (multiple tanks, reaction networks,
 multi-body kinematics with constraints, etc.).
 
-**Changes needed:** Modeler tool schema, `make_ode_simulator`, Modeler prompt.
 **Complexity:** moderate — the companion form is a special case of this.
 
 ### 2. State observer for multi-shooting initialization
@@ -498,7 +371,5 @@ segment initial conditions, with continuity constraints across boundaries.
 This avoids needing an observer but increases the problem size proportionally
 to the number of segments times the state dimension.
 
-**Changes needed:** `agents/estimator.py` (`_multi_shoot`, `run()`), `tools/solver_toolkit.py`
-(add EKF/UKF), `agents/validation.py` (same multi-shoot change).
 **Complexity:** high — the EKF pre-pass or augmented optimization are non-trivial,
 and each requires careful tuning of noise covariances or regularization.
