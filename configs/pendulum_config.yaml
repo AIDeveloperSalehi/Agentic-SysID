@@ -1,0 +1,42 @@
+# ── True plant (hidden from identification agents) ────────────────────────────
+plant:
+  J:         0.05    # kg·m²  moment of inertia
+  m:         0.5     # kg     bob mass
+  L:         0.30    # m      distance to CoM
+  b_v:       0.02    # N·m·s  viscous friction
+  f_c:       0.00    # N·m    Coulomb friction  (set to 0 → plant matches white-box ODE)
+  noise_std: 0.001   # rad    angle measurement noise
+  coulomb_smooth_eps: 0.01
+
+# ── Plant contract (visible to agents) ────────────────────────────────────────
+contract:
+  name: "pendulum_with_friction"
+  input_names:  ["torque"]
+  output_names: ["angle"]
+  state_names:  ["theta", "theta_dot"]
+  input_limits:
+    torque: [-2.0, 2.0]   # N·m
+  input_rate_limits:
+    torque: 1.0            # N·m change per step max
+  sample_time:  0.02       # 50 Hz
+  is_unstable:  false
+  description: >
+    Pendulum driven by a motor torque at the pivot. Angle is measured,
+    angular velocity is not directly observed. Physics is known (rigid-body
+    pendulum ODE) but friction model is uncertain.
+
+# ── Initial conditions ────────────────────────────────────────────────────────
+experiment:
+  x0: [0.3, 0.0]        # [theta_0 rad, omega_0 rad/s]
+  total_budget: 2000.0   # experiment units
+  identification_slice: 120.0
+  validation_slice:     60.0
+  greybox_slice:        40.0
+  surrogate_slice:      40.0
+
+# ── Identification targets ────────────────────────────────────────────────────
+identification:
+  tolerance:              0.05   # max normalised RMSE to accept model
+  max_outer_iterations:   5
+  inner_loop_max_steps:   8
+  min_improvement_pct:    5.0    # stop outer loop if improvement < this

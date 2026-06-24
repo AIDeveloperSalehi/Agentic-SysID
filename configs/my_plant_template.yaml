@@ -1,0 +1,103 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Agentic SysID — plant configuration template
+#
+# How to use
+# ----------
+# 1. Copy this file:
+#        cp configs/my_plant_template.yaml configs/my_system.yaml
+#
+# 2. Implement your plant in plants/my_system.py  (copy my_plant_template.py)
+#
+# 3. Fill in every section below — especially contract.description, which
+#    is what the LLM agents read to understand your system.
+#
+# 4. Run the pipeline:
+#        python main.py --config configs/my_system.yaml
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── Plant class ───────────────────────────────────────────────────────────────
+# Dotted import path to your BasePlant subclass.
+# Format: "module.path.ClassName"
+# Remove the `class` key entirely to use the built-in pendulum demo.
+plant:
+  class: "plants.my_plant_template.MyPlant"
+
+  # Any keyword arguments listed here are passed directly to your plant's
+  # __init__() method (except `seed`, which comes from --seed on the CLI).
+  noise_std: 0.01
+
+
+# ── Plant contract ────────────────────────────────────────────────────────────
+# What the identification agents are ALLOWED to know about your plant.
+# Do NOT include true parameter values here — the agents must discover them.
+#
+# Rule of thumb:
+#   - signal names, units, and safe limits → YES, put them here
+#   - true parameter values (R, L, J, …)  → NO, those go in your plant class
+contract:
+  name: "my_plant"           # short snake_case identifier, used in filenames
+
+  # List every actuator/input channel in order.
+  # Must match the order your plant's apply_input() u_func produces.
+  input_names:  ["voltage"]
+
+  # List every measured output channel in order.
+  # Must match the order of y returned by apply_input().
+  output_names: ["shaft_speed"]
+
+  # All ODE state variables in ascending derivative order.
+  # OK to list hidden states that are not directly measured.
+  state_names:  ["current", "omega"]
+
+  # Safe operating bounds for each input.
+  # The pipeline will never send an input outside these limits.
+  input_limits:
+    voltage: [-12.0, 12.0]    # [min, max] in physical units
+
+  # Sampling interval in seconds (= 1 / sample_rate_Hz).
+  sample_time: 0.001          # 1 ms → 1 kHz
+
+  # Set true only if the plant is open-loop unstable (e.g. inverted pendulum).
+  is_unstable: false
+
+  # ── Description (MOST IMPORTANT FIELD) ────────────────────────────────────
+  # This is the natural-language description read by the Intake and Modeler
+  # LLM agents to understand your system.
+  #
+  # Include:
+  #   - what the system is physically
+  #   - what the input(s) and output(s) are (name, units, range)
+  #   - what physics you know (if any) — ODE structure, conservation laws
+  #   - what is uncertain — parameters, friction model, nonlinearities
+  #   - what you need — "control-ready model", "RMSE < 5%", etc.
+  #
+  # The richer this description, the better the Modeler's ODE will be.
+  description: >
+    DC motor driven by armature voltage. Input: voltage (±12 V).
+    Output: shaft angular speed (rad/s). The system follows standard
+    electromechanical dynamics (armature circuit + rotational inertia)
+    but all parameters are unknown: armature resistance, inductance,
+    back-EMF constant, torque constant, rotor inertia, and viscous
+    friction coefficient. I need a control-ready identified model.
+
+
+# ── Experiment budget ─────────────────────────────────────────────────────────
+experiment:
+  # Total budget in "experiment units". Each call to apply_input() costs 2 units
+  # by default (set in main.py as experiment_cost=2.0). Budget 200 → ~100 runs.
+  total_budget: 200.0
+
+  # Initial state for all experiments.
+  # null → use the plant's default_x0.
+  # Otherwise: list matching your plant's n_states.
+  x0: null    # e.g. [0.0, 0.0] for a motor starting at rest
+
+
+# ── Identification targets ────────────────────────────────────────────────────
+identification:
+  # Maximum normalised RMSE (relative to output range) to accept a model.
+  # 0.05 = 5% — a common engineering tolerance for control synthesis.
+  # Tighten to 0.02 for high-accuracy applications.
+  tolerance: 0.05

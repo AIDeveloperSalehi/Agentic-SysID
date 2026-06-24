@@ -1,0 +1,59 @@
+# --- Secrets ---
+.env
+
+# --- Python cache ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# --- Test cache ---
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# --- Build / dist ---
+build/
+dist/
+
+# --- Virtual environments ---
+venv/
+env/
+.venv/
+.conda/
+
+# --- macOS ---
+.DS_Store
+.AppleDouble
+
+# --- Editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Claude Code settings (machine-specific) ---
+.claude/
+
+# --- Runtime-generated data ---
+data/
+logs/
+outpot.log
+*.log
+
+# --- Internal planning and dev notes ---
+PROGRESS.md
+implementation_plan.md
+agentic-sysid-multiagent-design.md
+
+# --- Large binary / duplicate ---
+demo.gif
+demo/FlowChart.tiff
+
+# --- Jupyter notebook outputs ---
+.ipynb_checkpoints/
+
+# --- Qdrant local storage ---
+.qdrant/
